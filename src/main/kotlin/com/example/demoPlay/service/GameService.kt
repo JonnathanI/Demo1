@@ -43,18 +43,25 @@ class GameService(
         // 1. Verificar la respuesta y obtener puntos
         val selectedOption = responseOptionRepository.findById(selectedOptionId).orElseThrow { IllegalArgumentException("Opción no válida.") }
 
+        // Accedemos a la pregunta no nula de la opción seleccionada.
+        // Asumimos que la relación Question en ResponseOption es @ManyToOne y no debe ser nula.
+        val question = selectedOption.question!!
+
         // Verificación de seguridad: la opción debe pertenecer a la pregunta
-        if (selectedOption.question.id != questionId) {
+        // CORRECCIÓN 1: Usar 'question.id' en lugar de 'selectedOption.question.id'
+        if (question.id != questionId) {
             throw IllegalArgumentException("La opción seleccionada no pertenece a la pregunta ID: $questionId.")
         }
 
         val isCorrect = selectedOption.isCorrect
-        val pointsGained = if (isCorrect) selectedOption.question.pointsAwarded else 0
+        // CORRECCIÓN 2: Usar 'question.pointsAwarded'
+        val pointsGained = if (isCorrect) question.pointsAwarded else 0
 
         // 2. Registrar el Log de la Respuesta
         val log = ResponseLog().apply {
             this.session = session
-            this.question = selectedOption.question
+            // CORRECCIÓN 3: Pasar el objeto Question no nulo
+            this.question = question
             this.selectedOptionId = selectedOptionId
             this.isCorrect = isCorrect
             this.pointsGained = pointsGained
@@ -64,6 +71,7 @@ class GameService(
         val savedLog = responseLogRepository.save(log)
 
         // 3. Actualizar puntos del usuario (Transacción atómica)
+        // Se usa orElseThrow() sin argumentos, lo cual es válido si el resultado es conocido (el usuario siempre debe tener un registro de puntos)
         val userPoints = userPointsRepository.findByUserId(session.user.id).orElseThrow()
         userPoints.totalPoints += pointsGained
         userPointsRepository.save(userPoints)

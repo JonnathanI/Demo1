@@ -17,4 +17,6 @@ class User {
     var fullName: String? = null
     var currentLevel: String = "Principiante"
     var registrationDate: LocalDateTime = LocalDateTime.now()
+    @Column(nullable = false)
+    var role: String = "ADMIN"
 }

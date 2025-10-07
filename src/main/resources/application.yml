@@ -10,7 +10,9 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop   # usa create, update o create-drop si quieres resetear datos
+      # CAMBIAR DE 'create-drop' A 'update'.
+      # 'update' mantiene los datos y solo ajusta el esquema si cambian las entidades.
+      ddl-auto: update
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -24,5 +26,3 @@ spring:
     baselineOnMigrate: true
     sqlMigrationPrefix: V
     schemas: public
-
-

@@ -1,5 +1,7 @@
 package com.example.demoPlay.service
 
+import com.example.demoPlay.dto.AdvantageDTO
+import com.example.demoPlay.dto.CosmeticDTO
 import com.example.demoPlay.entity.*
 import com.example.demoPlay.repository.*
 import org.springframework.stereotype.Service
@@ -14,7 +16,11 @@ class StoreService(
     private val advantageRepository: AdvantageRepository,
     private val purchaseRepository: AdvantagePurchaseRepository
 ) {
-    @Transactional(rollbackFor = [IllegalArgumentException::class]) // Si hay fallo en la lógica de puntos, revierte
+    // ==========================================================
+    // --- LÓGICA DE TIENDA PARA USUARIOS (YA EXISTENTE) ---
+    // ==========================================================
+
+    @Transactional(rollbackFor = [IllegalArgumentException::class])
     fun buyCosmetic(userId: Long, cosmeticId: Long): CosmeticsInventory {
         val cosmetic = cosmeticRepository.findById(cosmeticId).orElseThrow { NoSuchElementException("Cosmético no encontrado.") }
         val userPoints = userPointsRepository.findByUserId(userId).orElseThrow { NoSuchElementException("Usuario no encontrado.") }
@@ -24,7 +30,7 @@ class StoreService(
             throw IllegalArgumentException("Puntos insuficientes. Costo: ${cosmetic.pointCost}, Saldo: ${userPoints.totalPoints}")
         }
 
-        // 1. Restar puntos (CRUCIAL)
+        // 1. Restar puntos
         userPoints.totalPoints -= cosmetic.pointCost
         userPointsRepository.save(userPoints)
 
@@ -87,11 +93,71 @@ class StoreService(
         return purchaseRepository.save(purchase)
     }
 
-    // Método para marcar una ventaja como usada (llamado desde GameService o Controller)
     @Transactional
     fun markAdvantageAsUsed(purchaseId: Long): AdvantagePurchase {
         val purchase = purchaseRepository.findById(purchaseId).orElseThrow { NoSuchElementException("Compra de ventaja no encontrada.") }
         purchase.isUsed = true
         return purchaseRepository.save(purchase)
+    }
+
+
+    // ==========================================================
+    // --- LÓGICA DE ADMINISTRACIÓN (CRUD) AÑADIDA ---
+    // ==========================================================
+
+    // --- Ventajas (Advantage) CRUD ---
+
+    fun createAdvantage(dto: AdvantageDTO): Advantage {
+        val advantage = Advantage(
+            name = dto.name,
+            description = dto.description,
+            pointCost = dto.pointCost,
+            effect = dto.effect
+        )
+        return advantageRepository.save(advantage)
+    }
+
+    fun findAllAdvantages(): List<Advantage> = advantageRepository.findAll()
+
+    fun updateAdvantage(id: Long, dto: AdvantageDTO): Advantage {
+        val existing = advantageRepository.findById(id).orElseThrow { NoSuchElementException("Ventaja no encontrada con ID: $id") }
+        existing.name = dto.name
+        existing.description = dto.description
+        existing.pointCost = dto.pointCost
+        existing.effect = dto.effect
+        return advantageRepository.save(existing)
+    }
+
+    fun deleteAdvantage(id: Long) {
+        // Podrías añadir lógica de validación aquí si fuera necesario (ej: no eliminar si ya fue comprada)
+        advantageRepository.deleteById(id)
+    }
+
+    // --- Cosméticos (ProfileCosmetic) CRUD ---
+
+    fun createCosmetic(dto: CosmeticDTO): ProfileCosmetic {
+        val cosmetic = ProfileCosmetic(
+            name = dto.name,
+            type = dto.type,
+            pointCost = dto.pointCost,
+            resourceUrl = dto.resourceUrl
+        )
+        return cosmeticRepository.save(cosmetic)
+    }
+
+    fun findAllCosmetics(): List<ProfileCosmetic> = cosmeticRepository.findAll()
+
+    fun updateCosmetic(id: Long, dto: CosmeticDTO): ProfileCosmetic {
+        val existing = cosmeticRepository.findById(id).orElseThrow { NoSuchElementException("Cosmético no encontrado con ID: $id") }
+        existing.name = dto.name
+        existing.type = dto.type
+        existing.pointCost = dto.pointCost
+        existing.resourceUrl = dto.resourceUrl
+        return cosmeticRepository.save(existing)
+    }
+
+    fun deleteCosmetic(id: Long) {
+        // Podrías añadir lógica de validación aquí (ej: si está activo en el inventario de alguien)
+        cosmeticRepository.deleteById(id)
     }
 }
