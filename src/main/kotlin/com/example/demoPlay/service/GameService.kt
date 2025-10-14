@@ -2,11 +2,12 @@ package com.example.demoPlay.service
 
 import com.example.demoPlay.entity.*
 import com.example.demoPlay.repository.*
+import com.example.demoPlay.dto.HintResponseDTO // 💡 Necesario para la función purchaseAndGenerateHint
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
 import kotlin.random.Random
-import org.slf4j.LoggerFactory // <-- NEW: Import for Logging
+import org.slf4j.LoggerFactory
 
 @Service
 class GameService(
@@ -15,10 +16,12 @@ class GameService(
     private val responseOptionRepository: ResponseOptionRepository,
     private val gameSessionRepository: GameSessionRepository,
     private val responseLogRepository: ResponseLogRepository,
-    private val userPointsRepository: UserPointsRepository
+    private val userPointsRepository: UserPointsRepository,
+    private val userService: UserService // 💡 Necesario para manejar la suma y resta de puntos
 ) {
-    // <-- NEW: Initialize Logger
     private val logger = LoggerFactory.getLogger(javaClass)
+    // El costo de la pista se define en UserService, pero se usa aquí como referencia si no se inyecta directamente
+    private val HINT_COST = 50
 
     @Transactional
     fun startSession(userId: Long, difficulty: String, gameType: String): GameSession {
@@ -33,8 +36,6 @@ class GameService(
         return gameSessionRepository.save(session)
     }
 
-    // NOTE: This method should ideally be replaced by getGameQuestions (QuestionService)
-    // to return the DTO, but we keep it here for service completeness.
     fun getQuestions(difficulty: String, count: Int = 10): List<Question> {
         val allQuestions = questionRepository.findByDifficultyLevel(difficulty)
         return allQuestions.shuffled(Random).take(count)
@@ -55,7 +56,6 @@ class GameService(
         val isCorrect = selectedOption.isCorrect
         val pointsGained = if (isCorrect) question.pointsAwarded else 0
 
-        // <-- DIAGNOSTIC LOGGING
         logger.info("Processing answer for Session ID: {}, Question ID: {}. Correct: {}, Points Gained: {}",
             sessionId, questionId, isCorrect, pointsGained)
 
@@ -71,22 +71,10 @@ class GameService(
         }
         val savedLog = responseLogRepository.save(log)
 
-        // 3. Actualizar puntos del usuario (Transacción atómica)
+        // 3. Actualizar puntos del usuario usando UserService
         if (pointsGained > 0) {
-            val userPoints = userPointsRepository.findByUserId(session.user.id).orElseThrow()
-
-            // <-- DIAGNOSTIC LOGGING: Check BEFORE update
-            logger.info("UserPoints BEFORE update (User ID {}): TotalPoints={}, Version={}",
-                session.user.id, userPoints.totalPoints, userPoints.version)
-
-            // ✅ CRITICAL UPDATE
-            userPoints.totalPoints += pointsGained
-
-            userPointsRepository.save(userPoints)
-
-            // <-- DIAGNOSTIC LOGGING: Check AFTER update/save
-            logger.info("UserPoints AFTER update (User ID {}): New TotalPoints={}, New Version={}",
-                session.user.id, userPoints.totalPoints, userPoints.version)
+            // ✅ Usa la función de UserService para sumar puntos
+            userService.addPoints(session.user.id!!, pointsGained)
         }
 
         // 4. Actualizar total de puntos de la sesión
@@ -96,6 +84,57 @@ class GameService(
         logger.info("Session Total Points updated to: {}", session.pointsEarned)
 
         return savedLog
+    }
+
+    // ==========================================================
+    // 🛑 FUNCIÓN AÑADIDA: COMPRA Y GENERACIÓN DE PISTA
+    // ==========================================================
+
+    /**
+     * Procesa la compra de una pista, resta puntos (vía UserService) y genera el contenido dinámico.
+     */
+    @Transactional
+    fun purchaseAndGenerateHint(userId: Long, questionId: Long): HintResponseDTO {
+        // 1. Restar los puntos (Llama a UserService para la lógica de débito y validación)
+        // Esto lanzará IllegalArgumentException si los puntos son insuficientes
+        val newPoints = userService.purchaseHint(userId)
+
+        // 2. Obtener la pregunta y las opciones
+        val question = questionRepository.findById(questionId)
+            .orElseThrow { NoSuchElementException("Pregunta no encontrada con ID: $questionId") }
+
+        // Asumiendo que existe findByQuestionId en ResponseOptionRepository
+        val allOptions = responseOptionRepository.findByQuestionId(questionId)
+        val correctOption = allOptions.firstOrNull { it.isCorrect }
+            ?: throw NoSuchElementException("Opción correcta no encontrada para la pregunta ID: $questionId")
+
+        // 3. Generar la pista (Lógica dinámica, simplificada y aleatoria)
+        val correctText = correctOption.optionText.lowercase()
+        val hintText = when (Random.nextInt(3)) {
+            0 -> "La respuesta tiene **${correctText.length}** letras."
+            1 -> "Comienza con la letra **'${correctText.first().uppercaseChar()}'**."
+            else -> "Es la opción **${getOptionPosition(allOptions, correctOption)}**."
+        }
+
+        logger.info("Pista generada para user ${userId} (Costo: $HINT_COST): ${hintText}")
+
+        // 4. Devolver la pista y el nuevo saldo
+        return HintResponseDTO(
+            hintText = hintText,
+            newPoints = newPoints
+        )
+    }
+
+    private fun getOptionPosition(options: List<ResponseOption>, correctOption: ResponseOption): String {
+        // Asume que las opciones se cargan en el orden correcto de presentación.
+        val index = options.indexOfFirst { it.id == correctOption.id }
+
+        return when (index) {
+            0 -> "superior (primera)."
+            1 -> "central (segunda)."
+            2 -> "inferior (tercera)."
+            else -> "desconocida"
+        }
     }
 
     @Transactional

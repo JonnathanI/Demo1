@@ -79,8 +79,14 @@ class SecurityConfig(
                 auth
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                    // 1. RUTAS PÚBLICAS: registro y login
-                    .requestMatchers("/api/users/login", "/api/users/register").permitAll()
+                    // 1. RUTAS PÚBLICAS: registro, login y AHORA RECUPERACIÓN DE CONTRASEÑA
+                    .requestMatchers(
+                        "/api/users/login",
+                        "/api/users/register",
+                        // 🔑 AÑADIDAS: Rutas de recuperación de contraseña
+                        "/api/users/forgot-password",
+                        "/api/users/reset-password"
+                    ).permitAll()
 
                     // 2. ✅ RUTA DE JUEGO (CRÍTICO para el 403)
                     .requestMatchers("/api/game/**").hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
