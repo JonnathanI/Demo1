@@ -3,6 +3,7 @@ package com.example.demoPlay.service
 import com.example.demoPlay.dto.LoginRequestDTO
 import com.example.demoPlay.dto.UserLoginResponseDTO
 import com.example.demoPlay.dto.UserRegistrationDTO
+import com.example.demoPlay.dto.HintResponseDTO
 import com.example.demoPlay.entity.User
 import com.example.demoPlay.entity.UserPoints
 import com.example.demoPlay.repository.UserPointsRepository
@@ -20,8 +21,8 @@ class UserService(
     private val passwordEncoder: PasswordEncoder
 ) {
 
-    // CLAVE SECRETA: Debe coincidir con la que envía el frontend para obtener rol ADMIN
     private val ADMIN_SECRET_CODE = "SUPERCLAVE2025"
+    private val HINT_COST = 50 // 💡 Costo de una pista en puntos
 
     // ==========================================================
     // FUNCIÓN DE REGISTRO
@@ -33,7 +34,7 @@ class UserService(
             throw IllegalArgumentException("El nombre de usuario o email ya está en uso.")
         }
 
-        // 2. Determinación del rol (ADMIN si la clave coincide, USER por defecto)
+        // 2. Determinación del rol
         val roleToAssign = if (dto.adminCode.equals(ADMIN_SECRET_CODE, ignoreCase = false)) {
             "ADMIN"
         } else {
@@ -44,11 +45,11 @@ class UserService(
         val newUser = User().apply {
             username = dto.username
             email = dto.email
-            passwordHash = passwordEncoder.encode(dto.password) // Hashear la contraseña del DTO
+            passwordHash = passwordEncoder.encode(dto.password)
             fullName = dto.fullName
-            registrationDate = LocalDateTime.now() // Asignar fecha actual
-            currentLevel = "Principiante" // Valor por defecto
-            role = roleToAssign // Asignación del rol determinado
+            registrationDate = LocalDateTime.now()
+            currentLevel = "Principiante"
+            role = roleToAssign
         }
 
         // 4. Guardar el usuario
@@ -56,7 +57,6 @@ class UserService(
 
         // 5. Inicializar los puntos a 0
         val userPoints = UserPoints().apply {
-            // Aquí usamos el ID generado tras guardar el usuario
             this.userId = savedUser.id
             this.user = savedUser
             this.totalPoints = 0
@@ -78,16 +78,15 @@ class UserService(
                     .orElseThrow { UsernameNotFoundException("Usuario o email incorrecto.") }
             }
 
-        // 2. Verificar la contraseña usando el PasswordEncoder de Spring Security
+        // 2. Verificar la contraseña
         if (!passwordEncoder.matches(dto.password, user.passwordHash)) {
             throw IllegalArgumentException("Contraseña incorrecta.")
         }
 
         // 3. Generar el token MOCK
-        // CRÍTICO: El token incluye el rol (ADMIN/USER) para que el filtro lo pueda leer.
         val mockToken = "MOCK_TOKEN_${user.id}_${user.role}"
 
-        // 4. Devolver el DTO de respuesta (incluye el token)
+        // 4. Devolver el DTO de respuesta
         return UserLoginResponseDTO(
             id = user.id!!,
             username = user.username,
@@ -97,6 +96,33 @@ class UserService(
             currentLevel = user.currentLevel,
             registrationDate = user.registrationDate.toString(),
             token = mockToken
+        )
+    }
+
+    // ==========================================================
+    // 💡 FUNCIÓN PARA COMPRAR PISTAS (NUEVA)
+    // ==========================================================
+    @Transactional
+    fun purchaseHint(userId: Long, hintText: String): HintResponseDTO {
+        // 1. Obtener los puntos del usuario
+        val userPoints = userPointsRepository.findByUserId(userId)
+            .orElseThrow { NoSuchElementException("No se encontraron puntos para el usuario con ID: $userId") }
+
+        val currentPoints = userPoints.totalPoints
+
+        // 2. Verificar si tiene suficientes puntos
+        if (currentPoints < HINT_COST) {
+            throw IllegalArgumentException("Puntos insuficientes. La pista cuesta $HINT_COST puntos.")
+        }
+
+        // 3. Descontar los puntos y guardar
+        userPoints.totalPoints = currentPoints - HINT_COST
+        userPointsRepository.save(userPoints)
+
+        // 4. Devolver la respuesta
+        return HintResponseDTO(
+            hintText = hintText,
+            newPoints = userPoints.totalPoints
         )
     }
 

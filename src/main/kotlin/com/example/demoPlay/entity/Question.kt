@@ -1,29 +1,30 @@
 package com.example.demoPlay.entity
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import jakarta.persistence.*
 
 @Entity
 @Table(name = "questions")
+@JsonIgnoreProperties("hibernateLazyInitializer", "handler") // 👈 CORRECCIÓN: Ignora el proxy de Hibernate
 class Question(
-    // 1. Mover las propiedades al constructor primario
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long = 0,
 
     var questionText: String = "",
     var difficultyLevel: String = "",
-    var pointsAwarded: Int = 0,
+    var pointsAwarded: Int = 0, // ✅ CRUCIAL para la lógica del puntaje
     var category: String = "",
-    // NUEVO CAMPO: URL para la imagen o el audio. Puede ser null.
     @Column(length = 1024, nullable = true)
-var mediaUrl: String? = null
+    var mediaUrl: String? = null
 ) {
-    // 2. Usar 'responseOptions' y añadir 'orphanRemoval = true' para facilitar la edición (UPDATE)
     @OneToMany(
         mappedBy = "question",
         cascade = [CascadeType.ALL],
         fetch = FetchType.LAZY,
-        orphanRemoval = true // Crucial para la función updateQuestion
+        orphanRemoval = true
     )
-    var responseOptions: MutableList<ResponseOption> = mutableListOf() // ¡Nombre corregido a responseOptions!
+    // ⚠️ RECOMENDACIÓN: Añadir @JsonIgnore para prevenir ciclos infinitos si la pregunta se serializa a través de ResponseLog
+    @JsonIgnoreProperties("question")
+    var responseOptions: MutableList<ResponseOption> = mutableListOf()
 }

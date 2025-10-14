@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
 import kotlin.random.Random
+import org.slf4j.LoggerFactory // <-- NEW: Import for Logging
 
 @Service
 class GameService(
@@ -16,6 +17,9 @@ class GameService(
     private val responseLogRepository: ResponseLogRepository,
     private val userPointsRepository: UserPointsRepository
 ) {
+    // <-- NEW: Initialize Logger
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     @Transactional
     fun startSession(userId: Long, difficulty: String, gameType: String): GameSession {
         val user = userRepository.findById(userId).orElseThrow { NoSuchElementException("Usuario no encontrado.") }
@@ -29,10 +33,10 @@ class GameService(
         return gameSessionRepository.save(session)
     }
 
+    // NOTE: This method should ideally be replaced by getGameQuestions (QuestionService)
+    // to return the DTO, but we keep it here for service completeness.
     fun getQuestions(difficulty: String, count: Int = 10): List<Question> {
         val allQuestions = questionRepository.findByDifficultyLevel(difficulty)
-
-        // Selecciona preguntas al azar (la función 'shuffled()' es propia de Kotlin)
         return allQuestions.shuffled(Random).take(count)
     }
 
@@ -42,25 +46,22 @@ class GameService(
 
         // 1. Verificar la respuesta y obtener puntos
         val selectedOption = responseOptionRepository.findById(selectedOptionId).orElseThrow { IllegalArgumentException("Opción no válida.") }
-
-        // Accedemos a la pregunta no nula de la opción seleccionada.
-        // Asumimos que la relación Question en ResponseOption es @ManyToOne y no debe ser nula.
         val question = selectedOption.question!!
 
-        // Verificación de seguridad: la opción debe pertenecer a la pregunta
-        // CORRECCIÓN 1: Usar 'question.id' en lugar de 'selectedOption.question.id'
         if (question.id != questionId) {
             throw IllegalArgumentException("La opción seleccionada no pertenece a la pregunta ID: $questionId.")
         }
 
         val isCorrect = selectedOption.isCorrect
-        // CORRECCIÓN 2: Usar 'question.pointsAwarded'
         val pointsGained = if (isCorrect) question.pointsAwarded else 0
+
+        // <-- DIAGNOSTIC LOGGING
+        logger.info("Processing answer for Session ID: {}, Question ID: {}. Correct: {}, Points Gained: {}",
+            sessionId, questionId, isCorrect, pointsGained)
 
         // 2. Registrar el Log de la Respuesta
         val log = ResponseLog().apply {
             this.session = session
-            // CORRECCIÓN 3: Pasar el objeto Question no nulo
             this.question = question
             this.selectedOptionId = selectedOptionId
             this.isCorrect = isCorrect
@@ -71,14 +72,28 @@ class GameService(
         val savedLog = responseLogRepository.save(log)
 
         // 3. Actualizar puntos del usuario (Transacción atómica)
-        // Se usa orElseThrow() sin argumentos, lo cual es válido si el resultado es conocido (el usuario siempre debe tener un registro de puntos)
-        val userPoints = userPointsRepository.findByUserId(session.user.id).orElseThrow()
-        userPoints.totalPoints += pointsGained
-        userPointsRepository.save(userPoints)
+        if (pointsGained > 0) {
+            val userPoints = userPointsRepository.findByUserId(session.user.id).orElseThrow()
+
+            // <-- DIAGNOSTIC LOGGING: Check BEFORE update
+            logger.info("UserPoints BEFORE update (User ID {}): TotalPoints={}, Version={}",
+                session.user.id, userPoints.totalPoints, userPoints.version)
+
+            // ✅ CRITICAL UPDATE
+            userPoints.totalPoints += pointsGained
+
+            userPointsRepository.save(userPoints)
+
+            // <-- DIAGNOSTIC LOGGING: Check AFTER update/save
+            logger.info("UserPoints AFTER update (User ID {}): New TotalPoints={}, New Version={}",
+                session.user.id, userPoints.totalPoints, userPoints.version)
+        }
 
         // 4. Actualizar total de puntos de la sesión
         session.pointsEarned += pointsGained
         gameSessionRepository.save(session)
+
+        logger.info("Session Total Points updated to: {}", session.pointsEarned)
 
         return savedLog
     }
@@ -88,7 +103,6 @@ class GameService(
         val session = gameSessionRepository.findById(sessionId).orElseThrow { NoSuchElementException("Sesión de juego no encontrada.") }
         session.endTime = LocalDateTime.now()
 
-        // Se asume que los puntos ya fueron actualizados por 'processAnswer'
         return gameSessionRepository.save(session)
     }
 }

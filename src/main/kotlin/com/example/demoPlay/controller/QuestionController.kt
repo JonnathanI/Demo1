@@ -1,6 +1,7 @@
 package com.example.demoPlay.controller
 
 import com.example.demoPlay.dto.QuestionCreationDTO
+import com.example.demoPlay.dto.QuestionResponseDTO // <-- Importar el nuevo DTO
 import com.example.demoPlay.entity.Question
 import com.example.demoPlay.service.QuestionService
 import org.springframework.http.HttpStatus
@@ -14,13 +15,10 @@ class QuestionController(private val questionService: QuestionService) {
 
     // ==========================================================
     // ENDPOINTS DE ADMINISTRACIÓN (CRUD)
-    // Protegidos con @PreAuthorize para el rol ROLE_ADMIN
     // ==========================================================
 
     /**
-     * POST: Crea una nueva pregunta.
-     * Solo accesible por usuarios con rol 'ROLE_ADMIN'.
-     * URL: POST /api/questions
+     * POST: Crea una nueva pregunta. Solo accesible por 'ROLE_ADMIN'.
      */
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @PostMapping
@@ -34,9 +32,7 @@ class QuestionController(private val questionService: QuestionService) {
     }
 
     /**
-     * GET: Lista todas las preguntas (para el panel de administración).
-     * Solo accesible por usuarios con rol 'ROLE_ADMIN'.
-     * URL: GET /api/questions
+     * GET: Lista todas las preguntas (para el panel de administración). Solo accesible por 'ROLE_ADMIN'.
      */
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @GetMapping
@@ -46,9 +42,7 @@ class QuestionController(private val questionService: QuestionService) {
     }
 
     /**
-     * PUT: Actualiza una pregunta existente por ID.
-     * Solo accesible por usuarios con rol 'ROLE_ADMIN'.
-     * URL: PUT /api/questions/{id}
+     * PUT: Actualiza una pregunta existente por ID. Solo accesible por 'ROLE_ADMIN'.
      */
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @PutMapping("/{id}")
@@ -64,9 +58,7 @@ class QuestionController(private val questionService: QuestionService) {
     }
 
     /**
-     * DELETE: Elimina una pregunta por ID.
-     * Solo accesible por usuarios con rol 'ROLE_ADMIN'.
-     * URL: DELETE /api/questions/{id}
+     * DELETE: Elimina una pregunta por ID. Solo accesible por 'ROLE_ADMIN'.
      */
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @DeleteMapping("/{id}")
@@ -80,21 +72,23 @@ class QuestionController(private val questionService: QuestionService) {
     }
 
     // ==========================================================
-    // ENDPOINTS DE JUEGO (ACCESIBLES POR CUALQUIER USUARIO LOGUEADO)
+    // ENDPOINTS DE JUEGO
     // ==========================================================
 
     /**
      * GET: Obtiene un set de preguntas aleatorias para iniciar un juego.
-     * Accesible por cualquier usuario autenticado (rol USER o ADMIN).
+     * Accesible por cualquier usuario autenticado.
      * URL: GET /api/questions/game?difficulty=Dificil&count=10
      */
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/game")
+    // ✅ CORREGIDO: Tipo de retorno List<QuestionResponseDTO>
     fun getGameQuestions(
         @RequestParam difficulty: String,
         @RequestParam(defaultValue = "10") count: Int
-    ): ResponseEntity<List<Question>> {
-        val questions = questionService.getQuestions(difficulty, count)
+    ): ResponseEntity<List<QuestionResponseDTO>> {
+        // Llama al servicio que devuelve el DTO mapeado correctamente.
+        val questions = questionService.getGameQuestions(difficulty, count)
         return ResponseEntity.ok(questions)
     }
 }

@@ -2,22 +2,23 @@ server:
   port: 8081
 
 spring:
+  # Configuración de Base de Datos
   datasource:
     url: jdbc:postgresql://ep-holy-lab-adscvkyb-pooler.c-2.us-east-1.aws.neon.tech:5432/neondb?sslmode=require
     username: neondb_owner
     password: npg_CnJMka1dSQ5x
     driverClassName: org.postgresql.Driver
 
+  # Configuración de JPA/Hibernate
   jpa:
     hibernate:
-      # CAMBIAR DE 'create-drop' A 'update'.
-      # 'update' mantiene los datos y solo ajusta el esquema si cambian las entidades.
       ddl-auto: update
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
     show-sql: true
 
+  # Configuración de Flyway
   flyway:
     enabled: true
     baselineVersion: 1
@@ -26,3 +27,27 @@ spring:
     baselineOnMigrate: true
     sqlMigrationPrefix: V
     schemas: public
+
+  # ------------------------------------
+  # 💡 1. CONFIGURACIÓN DEL SERVICIO DE CORREO (SMTP)
+  # ------------------------------------
+  mail:
+    # Si usas Gmail (Puerto estándar para STARTTLS)
+    host: smtp.gmail.com
+    port: 587
+
+    # ⚠️ REEMPLAZA ESTAS CREDENCIALES
+    username: jonnathanjose043@gmail.com
+    password: hbdc rqfj eyig mynp
+
+    protocol: smtp
+    test-connection: false
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          # Para evitar problemas de conexión con certificados SSL/TLS
+          ssl:
+            trust: smtp.gmail.com

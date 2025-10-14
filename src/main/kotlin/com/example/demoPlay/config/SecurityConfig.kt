@@ -24,6 +24,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
 class SecurityConfig(
+    // 🚨 Este campo UserDetailsServiceImpl DEBE usarse, o el IDE te dará advertencia.
     private val userDetailsService: UserDetailsServiceImpl,
     private val jwtMockFilter: JwtMockFilter
 ) {
@@ -43,6 +44,7 @@ class SecurityConfig(
         return provider
     }
 
+    // 🚨 Necesario para inyectar AuthenticationManager en otros lugares (como el controlador de login)
     @Bean
     fun authenticationManager(http: HttpSecurity): AuthenticationManager {
         val authenticationManagerBuilder = http.getSharedObject(AuthenticationManagerBuilder::class.java)
@@ -50,7 +52,7 @@ class SecurityConfig(
         return authenticationManagerBuilder.build()
     }
 
-    // --- Configuración de CORS ---
+    // --- Configuración de CORS (Necesaria para que it.configurationSource() funcione) ---
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {
         val configuration = CorsConfiguration().apply {
@@ -70,18 +72,30 @@ class SecurityConfig(
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http
             .csrf { it.disable() }
+            // 🚨 Depende del Bean corsConfigurationSource() definido arriba
             .cors { it.configurationSource(corsConfigurationSource()) }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                    // Rutas públicas: registro y login
+
+                    // 1. RUTAS PÚBLICAS: registro y login
                     .requestMatchers("/api/users/login", "/api/users/register").permitAll()
 
-                    // AÑADIDO: Rutas de administración de Preguntas requieren explícitamente el rol ROLE_ADMIN
+                    // 2. ✅ RUTA DE JUEGO (CRÍTICO para el 403)
+                    .requestMatchers("/api/game/**").hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
+
+                    // 3. OTRAS RUTAS DE JUEGO
+                    .requestMatchers(HttpMethod.GET, "/api/questions/game").hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
+
+                    // 4. RUTAS DE PERFIL
+                    .requestMatchers(HttpMethod.GET, "/api/users/{userId}/profile", "/api/users/{userId}/points")
+                    .hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
+
+                    // 5. RUTAS DE SÓLO ADMINISTRADOR
                     .requestMatchers("/api/questions/**").hasAuthority("ROLE_ADMIN")
 
-                    // El resto de las peticiones requieren autenticación (USER y ADMIN pueden acceder)
+                    // 6. FALLBACK
                     .anyRequest().authenticated()
             }
             .addFilterBefore(jwtMockFilter, UsernamePasswordAuthenticationFilter::class.java)

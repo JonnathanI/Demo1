@@ -15,6 +15,7 @@ class GameController(private val gameService: GameService) {
 
     /**
      * Inicia una nueva sesión de juego para un usuario.
+     * Mapeo: POST /api/game/start?userId={id}&difficulty={level}&gameType={type}
      */
     @PostMapping("/start")
     fun startSession(
@@ -24,21 +25,24 @@ class GameController(private val gameService: GameService) {
     ): ResponseEntity<GameSession> {
         val session = gameService.startSession(userId, difficulty, gameType)
 
-        // El estado HTTP.CREATED (201) requiere el import de HttpStatus
+        // Retorna 201 Created
         return ResponseEntity.status(HttpStatus.CREATED).body(session)
     }
 
     /**
      * Obtiene un conjunto de preguntas para el cliente.
+     * Mapeo: GET /api/game/questions?difficulty={level}
      */
     @GetMapping("/questions")
     fun getQuestions(@RequestParam difficulty: String): ResponseEntity<List<Question>> {
         val questions = gameService.getQuestions(difficulty)
-        return ResponseEntity.ok(questions) // Estado HTTP 200 (OK)
+        // Retorna 200 OK
+        return ResponseEntity.ok(questions)
     }
 
     /**
      * Registra la respuesta del usuario y actualiza los puntos de forma atómica.
+     * Mapeo: POST /api/game/{sessionId}/answer/{questionId}
      */
     @PostMapping("/{sessionId}/answer/{questionId}")
     fun submitAnswer(
@@ -54,15 +58,18 @@ class GameController(private val gameService: GameService) {
             responseTimeMs = submission.responseTimeMs,
             advantageUsed = submission.advantageUsed
         )
-        return ResponseEntity.ok(log) // Estado HTTP 200 (OK)
+        // Retorna 200 OK
+        return ResponseEntity.ok(log)
     }
 
     /**
      * Finaliza la sesión de juego.
+     * Mapeo: POST /api/game/{sessionId}/finish
      */
     @PostMapping("/{sessionId}/finish")
     fun finishSession(@PathVariable sessionId: Long): ResponseEntity<GameSession> {
         val session = gameService.finishSession(sessionId)
-        return ResponseEntity.ok(session) // Estado HTTP 200 (OK)
+        // Retorna 200 OK
+        return ResponseEntity.ok(session)
     }
 }

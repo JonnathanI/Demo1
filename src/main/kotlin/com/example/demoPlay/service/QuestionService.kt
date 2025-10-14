@@ -1,6 +1,7 @@
 package com.example.demoPlay.service
 
 import com.example.demoPlay.dto.QuestionCreationDTO
+import com.example.demoPlay.dto.QuestionResponseDTO // <-- Importar el nuevo DTO
 import com.example.demoPlay.entity.Question
 import com.example.demoPlay.entity.ResponseOption
 import com.example.demoPlay.repository.QuestionRepository
@@ -18,9 +19,20 @@ class QuestionService(
     // --- LÓGICA DEL JUEGO ---
     // ==========================================================
 
-    fun getQuestions(difficulty: String, count: Int = 10): List<Question> {
+    /**
+     * Obtiene un conjunto de preguntas al azar para el juego y las mapea a un DTO.
+     * Esto asegura que el JSON enviado al Frontend tenga el formato correcto (incluyendo 'options' como List<String>).
+     */
+    // ✅ CORREGIDO: Devuelve QuestionResponseDTO
+    @Transactional(readOnly = true)
+    fun getGameQuestions(difficulty: String, count: Int = 10): List<QuestionResponseDTO> {
         val allQuestions = questionRepository.findByDifficultyLevel(difficulty)
-        return allQuestions.shuffled(Random).take(count)
+
+        // Selecciona preguntas al azar, las toma según el límite y las mapea al DTO
+        return allQuestions
+            .shuffled(Random)
+            .take(count)
+            .map { QuestionResponseDTO.fromEntity(it) } // <-- Mapeo CRÍTICO para el Frontend
     }
 
     // ==========================================================
@@ -40,10 +52,11 @@ class QuestionService(
             questionText = dto.questionText,
             difficultyLevel = dto.difficultyLevel,
             pointsAwarded = dto.pointsAwarded,
-            category = dto.category
+            category = dto.category,
+            mediaUrl = dto.mediaUrl
         )
 
-        // CORRECCIÓN: Usar ResponseOption() y el bloque apply {}
+        // Crear y asignar ResponseOptions
         val options = dto.options.map { optionDto ->
             ResponseOption().apply {
                 this.optionText = optionDto.optionText
@@ -72,11 +85,12 @@ class QuestionService(
         existingQuestion.difficultyLevel = dto.difficultyLevel
         existingQuestion.pointsAwarded = dto.pointsAwarded
         existingQuestion.category = dto.category
+        existingQuestion.mediaUrl = dto.mediaUrl
 
         // Reemplazar todas las opciones
         existingQuestion.responseOptions.clear()
 
-        // CORRECCIÓN: Usar ResponseOption() y el bloque apply {}
+        // Crear y agregar nuevas ResponseOptions
         val newOptions = dto.options.map { optionDto ->
             ResponseOption().apply {
                 this.optionText = optionDto.optionText
