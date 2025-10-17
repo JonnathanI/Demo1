@@ -1,25 +1,52 @@
 package com.example.demoPlay.controller
 
-import com.example.demoPlay.dto.UserRegistrationDTO
-import com.example.demoPlay.dto.LoginRequestDTO
-import com.example.demoPlay.dto.UserLoginResponseDTO
-import com.example.demoPlay.dto.HintResponseDTO
-import com.example.demoPlay.entity.User
+import com.example.demoPlay.dto.* import com.example.demoPlay.entity.User
 import com.example.demoPlay.service.UserService
 import com.example.demoPlay.service.EmailService
-import com.example.demoPlay.service.GameService // 💡 Necesario para buyHint
+import com.example.demoPlay.service.GameService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.*
 import org.springframework.security.core.userdetails.UsernameNotFoundException
+import org.springframework.security.core.Authentication // 💡 Añadido para el endpoint de puntos
+import java.lang.IllegalArgumentException
+import java.util.NoSuchElementException
 
 @RestController
 @RequestMapping("/api/users")
 class UserController(
     private val userService: UserService,
     private val emailService: EmailService,
-    private val gameService: GameService // 💡 INYECCIÓN necesaria para la lógica de compra de pista
+    private val gameService: GameService
 ) {
+
+    // ==========================================================
+    // --- GESTIÓN DE USUARIOS (ADMIN) ---
+    // ==========================================================
+
+    @GetMapping("/all")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    fun getAllUsers(): ResponseEntity<List<User>> {
+        val users = userService.findAllUsers()
+        return ResponseEntity.ok(users)
+    }
+
+    @PutMapping("/{userId}/admin-update")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    fun adminUpdateUser(@PathVariable userId: Long, @RequestBody updatedData: UserUpdateDTO): ResponseEntity<User> {
+        // Llama al servicio con los campos de rol y nivel del DTO
+        val user = userService.updateAdminUser(userId, updatedData.role, updatedData.currentLevel)
+        return ResponseEntity.ok(user)
+    }
+
+    @DeleteMapping("/{userId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    fun deleteUser(@PathVariable userId: Long): ResponseEntity<Void> {
+        userService.deleteUser(userId)
+        return ResponseEntity.noContent().build()
+    }
+
 
     // ==========================================================
     // --- REGISTRO Y LOGIN ---
@@ -46,8 +73,26 @@ class UserController(
         }
     }
 
+    // 💡 NUEVO ENDPOINT: Login con Google
+    @PostMapping("/login/google")
+    fun loginWithGoogle(@RequestBody tokenRequest: Map<String, String>): ResponseEntity<UserLoginResponseDTO> {
+        val googleToken = tokenRequest["token"]
+            ?: return ResponseEntity.badRequest().build()
+
+        return try {
+            val responseDTO = userService.loginOrCreateUserByGoogleToken(googleToken)
+            ResponseEntity.ok(responseDTO)
+        } catch (e: IllegalArgumentException) {
+            // Token inválido o expirado
+            ResponseEntity.status(HttpStatus.UNAUTHORIZED).build()
+        } catch (e: Exception) {
+            // Otros errores del servidor
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
+        }
+    }
+
     // ==========================================================
-    // --- RECUPERACIÓN DE CONTRASEÑA --- (NUEVOS ENDPOINTS)
+    // --- RECUPERACIÓN DE CONTRASEÑA ---
     // ==========================================================
 
     @PostMapping("/forgot-password")
@@ -57,7 +102,6 @@ class UserController(
 
         return try {
             userService.forgotPassword(email)
-            // Siempre se devuelve un mensaje genérico por seguridad, incluso si el email no existe.
             ResponseEntity.ok(mapOf("message" to "Si el email está registrado, se ha enviado un enlace para restablecer la contraseña."))
         } catch (e: NoSuchElementException) {
             ResponseEntity.ok(mapOf("message" to "Si el email está registrado, se ha enviado un enlace para restablecer la contraseña."))
@@ -83,18 +127,35 @@ class UserController(
         }
     }
 
+
     // ==========================================================
-    // --- OTROS ENDPOINTS ---
+    // --- OBTENER PERFIL COMPLETO ---
     // ==========================================================
 
-    // 💡 ENDPOINT COMPRA PISTA (CORREGIDO para usar GameService)
+    @GetMapping("/{userId}/profile/full")
+    // 💡 Mejorada la comparación de IDs en el PreAuthorize para ser más robusta con el String del principal.
+    @PreAuthorize("hasAnyAuthority('ROLE_USER', 'ROLE_ADMIN') and #userId.toString() == authentication.principal.toString()")
+    fun getFullUserProfile(@PathVariable userId: Long): ResponseEntity<*> {
+        return try {
+            val profile = userService.getUserProfile(userId)
+            ResponseEntity.ok(profile)
+        } catch (e: NoSuchElementException) {
+            ResponseEntity.status(HttpStatus.NOT_FOUND).body(mapOf("error" to e.message))
+        } catch (e: Exception) {
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(mapOf("error" to "Error al obtener el perfil: ${e.message}"))
+        }
+    }
+
+    // ==========================================================
+    // --- OTROS ENDPOINTS (EXISTENTES) ---
+    // ==========================================================
+
     @PostMapping("/{userId}/buy-hint")
     fun buyHint(@PathVariable userId: Long, @RequestBody request: Map<String, Long>): ResponseEntity<*> {
         val questionId = request["questionId"]
             ?: return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(mapOf("error" to "questionId es requerido."))
 
         return try {
-            // Llama a la función completa en GameService que gestiona la transacción y la pista
             val response: HintResponseDTO = gameService.purchaseAndGenerateHint(userId, questionId)
             ResponseEntity.ok(response)
         } catch (e: IllegalArgumentException) {
@@ -107,13 +168,21 @@ class UserController(
     }
 
     @PutMapping("/{userId}/profile")
-    fun updateProfile(@PathVariable userId: Long, @RequestBody updatedData: User): ResponseEntity<User> {
-        val user = userService.updateProfile(userId, updatedData)
+    // Se utiliza un Map para la actualización de perfil de usuario normal (nombre/email)
+    fun updateProfile(@PathVariable userId: Long, @RequestBody updatedData: Map<String, String>): ResponseEntity<User> {
+        val newFullName = updatedData["fullName"]
+        val newEmail = updatedData["email"]
+        val user = userService.updateProfile(userId, newFullName, newEmail)
         return ResponseEntity.ok(user)
     }
 
-    @GetMapping("/{userId}/points")
-    fun getUserPoints(@PathVariable userId: Long): ResponseEntity<Int> {
+    @GetMapping("/points") // 🛑 CORRECCIÓN CLAVE: Eliminamos {userId} de la ruta.
+    // Usamos PreAuthorize y obtenemos el ID del token autenticado.
+    @PreAuthorize("isAuthenticated()")
+    fun getUserPoints(authentication: Authentication): ResponseEntity<Int> {
+        // Obtenemos el ID (que viene como String en el principal del token mock) y lo convertimos a Long.
+        val userId = authentication.principal.toString().toLong()
+
         val points = userService.getUserPoints(userId)
         return ResponseEntity.ok(points)
     }

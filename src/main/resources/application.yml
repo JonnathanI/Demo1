@@ -36,7 +36,7 @@ spring:
     host: smtp.gmail.com
     port: 587
 
-    # ⚠️ REEMPLAZA ESTAS CREDENCIALES
+    # ⚠️ RECUERDA: La contraseña debe ser un "App Password" de Gmail si tienes 2FA
     username: jonnathanjose043@gmail.com
     password: hbdc rqfj eyig mynp
 
@@ -51,3 +51,11 @@ spring:
           # Para evitar problemas de conexión con certificados SSL/TLS
           ssl:
             trust: smtp.gmail.com
+
+# ==========================================================
+# 💡 CONFIGURACIÓN ADICIONAL PARA SERVICIOS EXTERNOS (GOOGLE)
+# ==========================================================
+google:
+  client:
+    # CLIENT ID DE GOOGLE UTILIZADO PARA EL LOGIN (OAuth 2.0)
+    id: 203925615165-ppgtpa9cmgq1eichb76u0kcr5pmgn8pi.apps.googleusercontent.com

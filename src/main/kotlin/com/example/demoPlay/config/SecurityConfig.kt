@@ -24,7 +24,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
 class SecurityConfig(
-    // 🚨 Este campo UserDetailsServiceImpl DEBE usarse, o el IDE te dará advertencia.
     private val userDetailsService: UserDetailsServiceImpl,
     private val jwtMockFilter: JwtMockFilter
 ) {
@@ -44,7 +43,6 @@ class SecurityConfig(
         return provider
     }
 
-    // 🚨 Necesario para inyectar AuthenticationManager en otros lugares (como el controlador de login)
     @Bean
     fun authenticationManager(http: HttpSecurity): AuthenticationManager {
         val authenticationManagerBuilder = http.getSharedObject(AuthenticationManagerBuilder::class.java)
@@ -52,7 +50,7 @@ class SecurityConfig(
         return authenticationManagerBuilder.build()
     }
 
-    // --- Configuración de CORS (Necesaria para que it.configurationSource() funcione) ---
+    // --- Configuración de CORS ---
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {
         val configuration = CorsConfiguration().apply {
@@ -72,36 +70,49 @@ class SecurityConfig(
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http
             .csrf { it.disable() }
-            // 🚨 Depende del Bean corsConfigurationSource() definido arriba
             .cors { it.configurationSource(corsConfigurationSource()) }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                    // 1. RUTAS PÚBLICAS: registro, login y AHORA RECUPERACIÓN DE CONTRASEÑA
+                    // 1. 🔑 RUTAS PÚBLICAS: Registro, Login, Google Login y Recuperación
                     .requestMatchers(
                         "/api/users/login",
                         "/api/users/register",
-                        // 🔑 AÑADIDAS: Rutas de recuperación de contraseña
+                        // 💡 NUEVO: Añadido el endpoint de Google
+                        "/api/users/login/google",
                         "/api/users/forgot-password",
                         "/api/users/reset-password"
                     ).permitAll()
 
-                    // 2. ✅ RUTA DE JUEGO (CRÍTICO para el 403)
-                    .requestMatchers("/api/game/**").hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
+                    // 2. RUTAS DE PERFIL Y PUNTOS (USERS & ADMIN)
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/users/{userId}/profile",
+                        // 🛑 CORRECCIÓN APLICADA: Añadida la ruta de perfil completo
+                        "/api/users/{userId}/profile/full",
+                        "/api/users/points"
+                    ).hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
 
-                    // 3. OTRAS RUTAS DE JUEGO
+                    // 3. RUTAS DE JUEGO GENERALES (USERS & ADMIN)
+                    // ✅ CORRECCIÓN CLAVE: Permitir que los USUARIOS accedan a las preguntas del juego.
                     .requestMatchers(HttpMethod.GET, "/api/questions/game").hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
 
-                    // 4. RUTAS DE PERFIL
-                    .requestMatchers(HttpMethod.GET, "/api/users/{userId}/profile", "/api/users/{userId}/points")
-                    .hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
+                    .requestMatchers("/api/game/**").hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
+                    .requestMatchers(HttpMethod.POST, "/api/users/{userId}/buy-hint").hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
 
-                    // 5. RUTAS DE SÓLO ADMINISTRADOR
-                    .requestMatchers("/api/questions/**").hasAuthority("ROLE_ADMIN")
 
-                    // 6. FALLBACK
+                    // 4. RUTAS DE SÓLO ADMINISTRADOR
+                    .requestMatchers(
+                        "/api/users/all",
+                        "/api/users/{userId}/admin-update",
+                        "/api/users/{userId}", // DELETE
+                        // Las demás rutas bajo /api/questions/ (CRUD) se mantienen solo para ADMIN
+                        "/api/questions/**"
+                    ).hasAuthority("ROLE_ADMIN")
+
+                    // 5. FALLBACK
                     .anyRequest().authenticated()
             }
             .addFilterBefore(jwtMockFilter, UsernamePasswordAuthenticationFilter::class.java)

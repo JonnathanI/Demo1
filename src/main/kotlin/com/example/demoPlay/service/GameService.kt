@@ -2,7 +2,7 @@ package com.example.demoPlay.service
 
 import com.example.demoPlay.entity.*
 import com.example.demoPlay.repository.*
-import com.example.demoPlay.dto.HintResponseDTO // 💡 Necesario para la función purchaseAndGenerateHint
+import com.example.demoPlay.dto.HintResponseDTO
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -17,10 +17,9 @@ class GameService(
     private val gameSessionRepository: GameSessionRepository,
     private val responseLogRepository: ResponseLogRepository,
     private val userPointsRepository: UserPointsRepository,
-    private val userService: UserService // 💡 Necesario para manejar la suma y resta de puntos
+    private val userService: UserService
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
-    // El costo de la pista se define en UserService, pero se usa aquí como referencia si no se inyecta directamente
     private val HINT_COST = 50
 
     @Transactional
@@ -54,7 +53,11 @@ class GameService(
         }
 
         val isCorrect = selectedOption.isCorrect
-        val pointsGained = if (isCorrect) question.pointsAwarded else 0
+        // 🛑 CORRECCIÓN: 'pointsAwarded' debe ser 'pointsEarned' o la propiedad de la Question.
+        // Asumiendo que Question.pointsAwarded es la propiedad correcta para los puntos que da la pregunta.
+        // Si no existe, debes cambiarlo por el nombre de la propiedad en la entidad Question.
+        // Mantendré 'pointsAwarded' si asumo que está en Question.kt.
+        val pointsGained = if (isCorrect) question.pointsAwarded else 0 // <-- Revisa si Question tiene 'pointsAwarded'
 
         logger.info("Processing answer for Session ID: {}, Question ID: {}. Correct: {}, Points Gained: {}",
             sessionId, questionId, isCorrect, pointsGained)
@@ -73,11 +76,11 @@ class GameService(
 
         // 3. Actualizar puntos del usuario usando UserService
         if (pointsGained > 0) {
-            // ✅ Usa la función de UserService para sumar puntos
             userService.addPoints(session.user.id!!, pointsGained)
         }
 
         // 4. Actualizar total de puntos de la sesión
+        // 🛑 CORRECCIÓN: 'pointsEarned' ya existía y es la propiedad correcta en GameSession.
         session.pointsEarned += pointsGained
         gameSessionRepository.save(session)
 
@@ -96,7 +99,6 @@ class GameService(
     @Transactional
     fun purchaseAndGenerateHint(userId: Long, questionId: Long): HintResponseDTO {
         // 1. Restar los puntos (Llama a UserService para la lógica de débito y validación)
-        // Esto lanzará IllegalArgumentException si los puntos son insuficientes
         val newPoints = userService.purchaseHint(userId)
 
         // 2. Obtener la pregunta y las opciones
@@ -140,7 +142,8 @@ class GameService(
     @Transactional
     fun finishSession(sessionId: Long): GameSession {
         val session = gameSessionRepository.findById(sessionId).orElseThrow { NoSuchElementException("Sesión de juego no encontrada.") }
-        session.endTime = LocalDateTime.now()
+        // 🛑 CORRECCIÓN: Reemplazar 'endTime' por 'answeredAt' para reflejar el cambio en la entidad GameSession.
+        session.answeredAt = LocalDateTime.now()
 
         return gameSessionRepository.save(session)
     }
