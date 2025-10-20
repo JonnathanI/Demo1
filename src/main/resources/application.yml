@@ -2,23 +2,28 @@ server:
   port: 8081
 
 spring:
-  # Configuración de Base de Datos
+  # ------------------------------------
+  # 1. 🛑 CONFIGURACIÓN DE BASE DE DATOS (NUEVAS CREDENCIALES)
+  # ------------------------------------
   datasource:
-    url: jdbc:postgresql://ep-holy-lab-adscvkyb-pooler.c-2.us-east-1.aws.neon.tech:5432/neondb?sslmode=require
+    # URL con la nueva pooler endpoint
+    url: jdbc:postgresql://ep-square-bird-ad3rs3zp-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require
+    # El usuario y contraseña se mantienen para el pooler endpoint
     username: neondb_owner
-    password: npg_CnJMka1dSQ5x
+    password: npg_LlfIeik5o9hV # <--- ¡Nueva contraseña!
     driverClassName: org.postgresql.Driver
 
-  # Configuración de JPA/Hibernate
+  # 2. Configuración de JPA/Hibernate
   jpa:
     hibernate:
+      # Dejamos 'update' para que Hibernate intente agregar la columna del avatar si no existe
       ddl-auto: update
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
     show-sql: true
 
-  # Configuración de Flyway
+  # 3. Configuración de Flyway (Se mantiene igual)
   flyway:
     enabled: true
     baselineVersion: 1
@@ -28,18 +33,12 @@ spring:
     sqlMigrationPrefix: V
     schemas: public
 
-  # ------------------------------------
-  # 💡 1. CONFIGURACIÓN DEL SERVICIO DE CORREO (SMTP)
-  # ------------------------------------
+  # 4. CONFIGURACIÓN DEL SERVICIO DE CORREO (Se mantiene igual)
   mail:
-    # Si usas Gmail (Puerto estándar para STARTTLS)
     host: smtp.gmail.com
     port: 587
-
-    # ⚠️ RECUERDA: La contraseña debe ser un "App Password" de Gmail si tienes 2FA
     username: jonnathanjose043@gmail.com
     password: hbdc rqfj eyig mynp
-
     protocol: smtp
     test-connection: false
     properties:
@@ -48,14 +47,10 @@ spring:
           auth: true
           starttls:
             enable: true
-          # Para evitar problemas de conexión con certificados SSL/TLS
           ssl:
             trust: smtp.gmail.com
 
-# ==========================================================
-# 💡 CONFIGURACIÓN ADICIONAL PARA SERVICIOS EXTERNOS (GOOGLE)
-# ==========================================================
+# 5. CONFIGURACIÓN ADICIONAL PARA SERVICIOS EXTERNOS (GOOGLE)
 google:
   client:
-    # CLIENT ID DE GOOGLE UTILIZADO PARA EL LOGIN (OAuth 2.0)
     id: 203925615165-ppgtpa9cmgq1eichb76u0kcr5pmgn8pi.apps.googleusercontent.com

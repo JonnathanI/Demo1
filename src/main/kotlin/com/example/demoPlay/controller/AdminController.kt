@@ -34,7 +34,7 @@ class AdminController(
     @PutMapping("/users/{id}")
     fun updateUser(@PathVariable id: Long, @RequestBody dto: UserUpdateDTO): ResponseEntity<User> {
         return try {
-            val updatedUser = userService.updateAdminUser(id, dto.role, dto.currentLevel)
+            val updatedUser = userService.updateAdminUser(id, dto)
             ResponseEntity.ok(updatedUser)
         } catch (e: NoSuchElementException) {
             ResponseEntity.notFound().build()
