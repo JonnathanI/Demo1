@@ -27,5 +27,6 @@ data class UserProfileDTO(
     val correctPercentage: Double,
 
     // Historial detallado
-    val gameHistory: List<UserGameStatDTO>
+    val gameHistory: List<UserGameStatDTO>,
+    val avatarIconName: String?,
 )
