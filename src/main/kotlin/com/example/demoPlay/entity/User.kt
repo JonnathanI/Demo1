@@ -22,4 +22,6 @@ class User {
 
     @Column(nullable = false)
     var role: String = "ADMIN"
+    @Column(name = "avatar_icon_name")
+    var avatarIconName: String = "FaUserCircle"
 }
