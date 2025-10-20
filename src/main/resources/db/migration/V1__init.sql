@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS USERS (
                                      password_hash VARCHAR(255) NOT NULL, -- Store the hashed password (NEVER plaintext!)
                                      full_name VARCHAR(100),
                                      current_level VARCHAR(20) DEFAULT 'Principiante', -- Starter level for progression
-                                     registration_date TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                                     registration_date TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                                     avatar_icon_name VARCHAR(50) DEFAULT 'FaUserCircle'
 );
 
 -- Table 2: USER_POINTS
